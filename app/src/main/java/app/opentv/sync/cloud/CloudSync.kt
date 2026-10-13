@@ -236,17 +236,22 @@ class CloudSync(
         check(!preferences.enabled.value)
         val api = api()
         if (!api.signIn(email, password, create)) return@withLock "Check your email to confirm your account, then sign in."
-        preferences.newDevice()
-        api.rpc("sync_register_device", buildJsonObject { put("device", preferences.deviceId); put("nickname", preferences.nickname) })
-        val session = api.session()
-        val ring = api.request("rest/v1/sync_keyring?select=commitment").jsonArray
-        if (ring.isEmpty()) {
-            val key = CloudCrypto.randomKey()
-            // Save first, so interruption between registration and local persistence cannot orphan a key.
-            vault.put("key:${account(session)}", CloudCrypto.encode(key))
-            api.rpc("sync_create_keyring", buildJsonObject { put("commitment", keyCommitment(session, key)) })
-        } else master(session)?.let { verifyKey(api, session, it) }
-        if (hasKey()) "Signed in. Save your recovery key before enabling cloud sync." else "Signed in. Pair with an existing device or enter your recovery key."
+        try {
+            preferences.newDevice()
+            api.rpc("sync_register_device", buildJsonObject { put("device", preferences.deviceId); put("nickname", preferences.nickname) })
+            val session = api.session()
+            val ring = api.request("rest/v1/sync_keyring?select=commitment").jsonArray
+            if (ring.isEmpty()) {
+                val key = CloudCrypto.randomKey()
+                // Save first, so interruption between registration and local persistence cannot orphan a key.
+                vault.put("key:${account(session)}", CloudCrypto.encode(key))
+                api.rpc("sync_create_keyring", buildJsonObject { put("commitment", keyCommitment(session, key)) })
+            } else master(session)?.let { verifyKey(api, session, it) }
+            if (hasKey()) "Signed in. Save your recovery key before enabling cloud sync." else "Signed in. Pair with an existing device or enter your recovery key."
+        } catch (e: Exception) {
+            api.clearSession()
+            throw e
+        }
     } }
     private suspend fun verifyKey(api: SupabaseApi, session: CloudSession, key: ByteArray) {
         require(key.size == 32)

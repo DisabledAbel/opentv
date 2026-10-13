@@ -40,6 +40,27 @@ class CloudReplicaTest {
         val before = a.edit(table, id, provider, null, false, 1000)
         assertEquals(1001, a.edit(table, id, provider, before, true, 10).record.clock)
     }
+    @Test fun `delayed playback capture cannot overwrite a newer viewing event`() {
+        val table = CloudCategory.WATCH.table
+        val newer = CloudItem("position", mapOf("updated" to "300", "position" to "9000"))
+        val old = CloudItem("position", mapOf("updated" to "200", "position" to "1000"))
+        val current = b.edit(table, id, newer, null, false, 500)
+        val delayed = a.edit(table, id, old, current, false, 1000)
+        assertEquals(300L, current.record.clock)
+        assertEquals(200L, delayed.record.clock)
+        assertEquals(current.record, b.merge(current, delayed.record).record)
+        assertEquals(501L, a.edit(table, id, old, current, true, 501).record.clock)
+    }
+    @Test fun `recapturing a playback event after profile rename keeps its encrypted revision`() {
+        val table = CloudCategory.WATCH.table
+        val item = CloudItem("position", mapOf("updated" to "200", "profile_name" to "Before"))
+        val original = a.edit(table, id, item, null, false, 500)
+        val renamed = item.copy(values = item.values + ("profile_name" to "After"))
+        val recaptured = a.edit(table, id, renamed, original, false, 1000)
+        assertEquals(original.record, recaptured.record)
+        assertEquals(a.digest(renamed), recaptured.baseline)
+        assertFalse(a.merge(recaptured, original.record).pending)
+    }
     @Test fun `replayed events and acknowledgements are idempotent`() {
         val entry = a.edit(table, id, provider, null, false, 100)
         val acknowledged = a.merge(entry, entry.record)

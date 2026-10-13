@@ -34,6 +34,31 @@ select is((select count(*)::int from sync_providers),1,'retries do not duplicate
 select throws_ok($$insert into sync_providers(user_id,id) values('10000000-0000-4000-8000-000000000002',gen_random_uuid())$$,'42501','permission denied for table sync_providers','direct writes cannot bypass ownership or reconciliation');
 select throws_ok($$select sync_push('30000000-0000-4000-8000-000000000001','[{"table_name":"auth.users","id":"40000000-0000-4000-8000-000000000001","clock":100,"writer_device_id":"30000000-0000-4000-8000-000000000001"}]')$$,'22023','Invalid sync operation or device clock','dynamic table names are allowlisted');
 
+-- Malformed content fields must fail before casts/NOT NULL constraints in the dynamic insert.
+with valid as (
+  select jsonb_build_object('table_name','sync_providers','id','40000000-0000-4000-8000-000000000001',
+    'clock',300,'writer_device_id','30000000-0000-4000-8000-000000000001','deleted',false,
+    'ciphertext',repeat('ciphertext',10),'schema_version',1) as record
+)
+select throws_ok(format($q$select sync_push('30000000-0000-4000-8000-000000000001',%L::jsonb)$q$,jsonb_build_array(r)),
+  '22023','Invalid sync operation or device clock',description)
+from valid cross join lateral (values
+  (record-'deleted','reject missing deletion flag'),
+  (record||jsonb_build_object('deleted',null),'reject null deletion flag'),
+  (record||jsonb_build_object('deleted','true'),'reject string deletion flag'),
+  (record||jsonb_build_object('deleted',0),'reject numeric deletion flag'),
+  (record-'ciphertext','reject missing ciphertext'),
+  (record||jsonb_build_object('ciphertext',null),'reject null ciphertext'),
+  (record||jsonb_build_object('ciphertext',123),'reject numeric ciphertext'),
+  (record||jsonb_build_object('ciphertext',repeat('x',29)),'reject short ciphertext'),
+  (record||jsonb_build_object('ciphertext',repeat('x',65537)),'reject oversized ciphertext'),
+  (record-'schema_version','reject missing schema version'),
+  (record||jsonb_build_object('schema_version',null),'reject null schema version'),
+  (record||jsonb_build_object('schema_version','1'),'reject string schema version'),
+  (record||jsonb_build_object('schema_version',2),'reject unsupported schema version'),
+  (record||jsonb_build_object('schema_version',1.0),'reject non-integer schema representation')
+) invalid(r,description);
+
 -- Every logical entity uses the same authorization, ownership, and incremental path.
 select lives_ok(format($q$select sync_push('30000000-0000-4000-8000-000000000001',jsonb_build_array(jsonb_build_object(
  'table_name',%L,'id','40000000-0000-4000-8000-000000000002','clock',100,'writer_device_id','30000000-0000-4000-8000-000000000001',

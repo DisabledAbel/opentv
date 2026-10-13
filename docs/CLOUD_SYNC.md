@@ -148,7 +148,8 @@ device or password is compromised.
 - Realtime availability is not guaranteed; the durable reconciliation path is authoritative.
   Server outage, deleted auth sessions, and inaccessible encrypted payloads retain local data.
 - Keep device clocks accurate. Writes more than five minutes ahead of backend time are rejected;
-  offline conflicts use edit/capture time and a deterministic device tie break, not viewing time.
+  playback updates use their saved viewing timestamp, so delayed capture cannot replace newer
+  progress. Other edits and deletions use edit/capture time with a deterministic device tie break.
 - LAN/NAS sync retain their preexisting additive merge semantics. Explicitly importing an old
   bundle through those workflows can constitute a new local addition after a cloud tombstone.
 - Only M3U/M3U8 and Xtream providers are supported in cloud sync. Do not share subscriptions

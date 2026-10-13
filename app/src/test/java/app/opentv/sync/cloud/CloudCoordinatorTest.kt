@@ -33,6 +33,7 @@ class CloudCoordinatorTest {
     private val records = mutableMapOf<Pair<String,String>, CloudRecord>()
     private var sequence = 0L
     private var offline = false
+    private var setupFailure: String? = null
     private val databases = mutableListOf<OpenTvDatabase>()
     private val stores = mutableListOf<CloudStore>()
     private data class Device(val graph: ServiceLocator.Graph, val cloud: CloudSync, val store: CloudStore)
@@ -46,8 +47,20 @@ class CloudCoordinatorTest {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     if (offline) return MockResponse().setResponseCode(503)
+                    if (request.path == setupFailure) return MockResponse().setResponseCode(503)
                     val body = if (request.body.size > 0) CloudReplica.json.parseToJsonElement(request.body.readUtf8()).jsonObject else buildJsonObject {}
                     val response = when (request.path) {
+                        "/auth/v1/token?grant_type=password" -> {
+                            val session = UUID.randomUUID().toString()
+                            val claims = buildJsonObject { put("exp", System.currentTimeMillis()/1000+3600); put("session_id", session) }
+                            buildJsonObject {
+                                put("access_token", "header.${CloudCrypto.encode(claims.toString().toByteArray())}.signature")
+                                put("refresh_token", "test-refresh")
+                                put("user", buildJsonObject { put("id", user) })
+                            }
+                        }
+                        "/rest/v1/rpc/sync_register_device", "/rest/v1/rpc/sync_create_keyring" -> JsonNull
+                        "/rest/v1/sync_keyring?select=commitment" -> JsonArray(emptyList())
                         "/rest/v1/rpc/sync_authorize_device" -> JsonNull
                         "/rest/v1/rpc/sync_push" -> {
                             JsonArray(body.getValue("records").jsonArray.map { encoded ->
@@ -141,5 +154,18 @@ class CloudCoordinatorTest {
         d.cloud.sync(); d.cloud.sync()
         assertEquals("Offline edit", CloudReplica(key, "$origin|$user", d.cloud.preferences.deviceId).content(records.values.single()).values["name"])
         assertEquals(1, records.size)
+    }
+    @Test fun `failed post-login setup clears session and allows a successful retry`() = runTest {
+        for (stage in listOf("/rest/v1/rpc/sync_register_device", "/rest/v1/sync_keyring?select=commitment", "/rest/v1/rpc/sync_create_keyring")) {
+            val d = device()
+            d.cloud.preferences.setEnabled(false)
+            setupFailure = stage
+            try { d.cloud.signIn("test@example.test", "test-password", false); fail() }
+            catch (e: CloudApiException) { assertEquals(503, e.status) }
+            assertFalse(d.cloud.isSignedIn())
+            setupFailure = null
+            assertEquals("Signed in. Save your recovery key before enabling cloud sync.", d.cloud.signIn("test@example.test", "test-password", false))
+            assertTrue(d.cloud.isSignedIn())
+        }
     }
 }

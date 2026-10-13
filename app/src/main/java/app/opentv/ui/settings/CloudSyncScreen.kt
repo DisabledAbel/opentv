@@ -161,7 +161,7 @@ fun CloudSyncScreen(onBack: () -> Unit) {
                 if (!hasKey) {
                     item { CloudField(stringResource(R.string.cloud_recovery), recovery, true) { recovery = it } }
                     item { Button(enabled = !busy && recovery.isNotBlank(), onClick = { action { try { cloud.recover(recovery) } finally { recovery = "" } } }) { Text(stringResource(R.string.cloud_recover)) } }
-                    item { OutlinedButton(enabled = !busy, onClick = { action { ownCode = cloud.beginPairing(); comparison = null; receiving = true } }) { Text(stringResource(R.string.cloud_request_pair)) } }
+                    item { OutlinedButton(enabled = !busy, onClick = { action { ownCode = cloud.beginPairing(); comparison = null } }) { Text(stringResource(R.string.cloud_request_pair)) } }
                 } else {
                     item { Text(stringResource(R.string.cloud_recovery_warning)) }
                     item { OutlinedButton(enabled = !busy, onClick = { action { savedRecovery = if (savedRecovery == null) cloud.recoveryKey() else null } }) { Text(stringResource(R.string.cloud_show_recovery)) } }

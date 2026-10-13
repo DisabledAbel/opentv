@@ -48,7 +48,17 @@ class CloudReplica(private val key: ByteArray, private val account: String, priv
     fun digest(item: CloudItem): String = CloudCrypto.encode(CloudCrypto.hmac(key, encode(item)))
     fun encode(item: CloudItem): String = json.encodeToString(CloudItem.serializer(), item.copy(values = item.values.toSortedMap()))
     fun edit(table: String, id: String, item: CloudItem, old: CloudEntry?, deleted: Boolean, now: Long): CloudEntry {
-        val record = CloudRecord(table, id, maxOf(now, (old?.record?.clock ?: 0) + 1), device, deleted, "")
+        // Playback updates retain their event time even when captured long after watching.
+        // Deliberate removals and other edits still advance the existing logical clock.
+        val clock = if (table == CloudCategory.WATCH.table && item.type == "position" && !deleted) {
+            item.values.getValue("updated").toLong()
+        } else maxOf(now, (old?.record?.clock ?: 0) + 1)
+        if (old != null && old.record.clock == clock && old.record.writer == device && !old.record.deleted && !deleted) {
+            // Re-capturing the same viewing event (e.g. after a profile rename) must retain
+            // its encrypted revision so the server acknowledgement remains idempotent.
+            return old.copy(baseline = digest(item), applied = true)
+        }
+        val record = CloudRecord(table, id, clock, device, deleted, "")
         return CloudEntry(
             record.copy(ciphertext = CloudCrypto.seal(key, encode(item), record.aad(account))),
             if (deleted) null else digest(item), pending = true, applied = true,

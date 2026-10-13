@@ -49,7 +49,7 @@ class CloudRealtime(
             hint?.cancel(); hint = scope.launch { delay(1000); changed() }
         } else if (event == "phx_error" || event == "phx_close") close()
     }
-    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { heartbeat?.cancel(); disconnected.complete(Unit) }
-    override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { heartbeat?.cancel(); disconnected.complete(Unit) }
+    override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { heartbeat?.cancel(); hint?.cancel(); disconnected.complete(Unit) }
+    override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { heartbeat?.cancel(); hint?.cancel(); disconnected.complete(Unit) }
     fun close() { disconnected.complete(Unit); heartbeat?.cancel(); hint?.cancel(); socket?.close(1000, ""); socket = null }
 }

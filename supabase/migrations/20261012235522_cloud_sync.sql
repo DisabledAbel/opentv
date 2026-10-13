@@ -255,7 +255,12 @@ begin
   for r in select * from jsonb_array_elements(records) loop
     t:=r->>'table_name';
     if t not in ('sync_providers','sync_playlists','sync_favorites','sync_watch_progress','sync_profiles','sync_settings')
-      or (r->>'writer_device_id')::uuid<>device or (r->>'clock')::bigint>extract(epoch from now())*1000+300000 then
+      or (r->>'writer_device_id')::uuid<>device or (r->>'clock')::bigint>extract(epoch from now())*1000+300000
+      or jsonb_typeof(r->'deleted') is distinct from 'boolean'
+      or jsonb_typeof(r->'ciphertext') is distinct from 'string'
+      or length(r->>'ciphertext') not between 30 and 65536
+      or jsonb_typeof(r->'schema_version') is distinct from 'number'
+      or r->>'schema_version' is distinct from '1' then
       raise invalid_parameter_value using message='Invalid sync operation or device clock';
     end if;
     execute format('insert into public.%I(user_id,id,writer_device_id,clock,deleted,ciphertext,schema_version,change_seq)

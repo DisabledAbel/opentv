@@ -78,7 +78,10 @@ class SupabaseApi(
         persist(refreshed); refreshed
     }
     suspend fun signOut() {
-        try { request("auth/v1/logout?scope=local", "POST", buildJsonObject {}) }
+        try {
+            storedSession()?.let { raw("auth/v1/logout?scope=local", "POST", buildJsonObject {}, it.accessToken) }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { /* Remote logout is best-effort; local cleanup is unconditional. */ }
         finally { persist(null) }
     }
     fun clearSession() = persist(null)

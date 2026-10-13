@@ -74,8 +74,24 @@ class SupabaseApiTest {
     @Test fun `signout clears local secrets when remote logout fails`() = runTest {
         persist(System.currentTimeMillis()/1000+3600)
         server.enqueue(MockResponse().setResponseCode(503))
-        try { api.signOut() } catch (_: CloudApiException) { }
+        api.signOut()
         assertNull(api.storedSession())
+    }
+    @Test fun `signout sends the expired stored token once without refreshing`() = runTest {
+        persist(1)
+        val token = api.storedSession()!!.accessToken
+        server.enqueue(MockResponse().setResponseCode(401))
+        api.signOut()
+        assertNull(api.storedSession())
+        assertEquals(1, server.requestCount)
+        val request = server.takeRequest()
+        assertEquals("/auth/v1/logout?scope=local", request.path)
+        assertEquals("Bearer $token", request.getHeader("Authorization"))
+    }
+    @Test fun `signout with no session does not contact the backend`() = runTest {
+        api.signOut()
+        assertNull(api.storedSession())
+        assertEquals(0, server.requestCount)
     }
     @Test fun `backend cannot redirect credentials to another host`() = runTest {
         persist(System.currentTimeMillis()/1000+3600)
