@@ -542,4 +542,11 @@
     <string tools:ignore="MissingTranslation" name="cloud_reauth">Sign in again</string>
     <string tools:ignore="MissingTranslation" name="cloud_reauth_help">If your session expired or this device was removed, disable sync and sign in again. Your saved encryption key stays available for this account.</string>
     <string tools:ignore="MissingTranslation" name="cloud_pair_qr">Pairing lookup code only. Scan to copy the code to your signed-in device.</string>
+    <string name="settings_buffer_title">Playback buffer</string>
+    <string name="settings_buffer_default">Default (up to 60 seconds)</string>
+    <string name="settings_buffer_small">Small (up to 15 seconds)</string>
+    <string name="settings_buffer_medium">Medium (up to 30 seconds)</string>
+    <string name="settings_buffer_large">Large (up to 90 seconds)</string>
+    <string name="settings_buffer_extra_large">Extra large (up to 120 seconds)</string>
+    <string name="settings_buffer_note">Larger buffers can smooth brief interruptions but use more memory and take longer to start. Applies when you reopen playback. Guide previews, live pause, and recordings still being written keep their existing buffers.</string>
 </resources>
